@@ -1,0 +1,8 @@
+When you come back tomorrow, just remember the two steps to wake your bot up:
+
+(1) Open a terminal in the folder and start the API: 
+source venv/bin/activate && uvicorn main:app --reload
+(2) Open a second terminal and get your URL: 
+ $ source venv/bin/activate 
+ $ python get_temp_WebhookURL.py 
+(Copy that URL into your LINE Developer Console, and you are back online!)
