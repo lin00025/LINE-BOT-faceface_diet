@@ -44,6 +44,7 @@ def build_profile_msg(profile) -> TextSendMessage:
         f"📏 身高: {profile.height_cm} cm\n"
         f"⚖️ 體重: {profile.weight_kg} kg\n"
         f"🍟 體脂: {profile.body_fat_percentage} %\n\n"
+        f"📍 位置: {profile.timezone}\n\n"
         f"🎯 TDEE代謝量: {profile.target_calories} 大卡\n"
         f"🥚 蛋白質目標: {profile.target_protein_multiplier}g × 體重(kg)\n"
         f"🕒 最後更新: {updated_str}"
@@ -81,7 +82,7 @@ def build_keys_msg() -> TextSendMessage:
 # ---------------------------------------------------------------------------
 # Review intent response — reads DB logs, returns formatted text (zero LLM)
 # ---------------------------------------------------------------------------
-def build_review_msg(today_logs) -> TextSendMessage:
+def build_review_msg(today_logs, profile) -> TextSendMessage:
     if not today_logs:
         return TextSendMessage(
             text="臉臉摸摸看紀錄本…\n沒有，今天還沒有任何飲食或運動紀錄！\n快去吃雞腿吧 🐻"
@@ -89,9 +90,18 @@ def build_review_msg(today_logs) -> TextSendMessage:
 
     food_lines, exercise_lines, body_lines = [], [], []
 
+    import zoneinfo
+    import datetime
+    try:
+        user_tz = zoneinfo.ZoneInfo(profile.timezone)
+    except Exception:
+        user_tz = zoneinfo.ZoneInfo("Asia/Taipei")
+
     visible_id = 1
     for log in today_logs:
-        t = log.timestamp.strftime("%H:%M")
+        dt_utc = log.timestamp.replace(tzinfo=datetime.timezone.utc)
+        t = dt_utc.astimezone(user_tz).strftime("%H:%M")
+        
         if log.record_type == "FOOD":
             food_lines.append(
                 f"  [ {visible_id} ] {t}  {log.description}\n"

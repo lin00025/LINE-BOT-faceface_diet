@@ -21,8 +21,11 @@ class UserProfile(Base):
     target_protein_multiplier = Column(Float, default=1.0) 
     target_calories = Column(Integer, default=2000)
     
+    # Location Preference
+    timezone = Column(String, default="Asia/Taipei")
+    
     # Tracks the exact time their core profile was last changed
-    updated_at = Column(DateTime, default=datetime.datetime.now, onupdate=datetime.datetime.now)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
 
 class LogEntry(Base):
     """
@@ -34,7 +37,7 @@ class LogEntry(Base):
     line_user_id = Column(String, ForeignKey("users.line_user_id"))
     
     record_type = Column(String) # "FOOD", "EXERCISE", or "BODY_UPDATE"
-    timestamp = Column(DateTime, default=datetime.datetime.now) 
+    timestamp = Column(DateTime, default=datetime.datetime.utcnow) 
     
     description = Column(String) 
     

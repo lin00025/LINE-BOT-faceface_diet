@@ -7,6 +7,7 @@ Routing order (cheapest first):
 """
 import os
 import datetime
+import zoneinfo
 import uvicorn
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import JSONResponse
@@ -103,17 +104,25 @@ def get_or_create_profile(db, user_id: str) -> tuple[UserProfile, bool]:
             body_fat_percentage=initial_bf,
             target_protein_multiplier=1.2,
             target_calories=calculate_tdee(initial_weight, initial_bf, 30, 160.0),
+            timezone="Asia/Taipei",
         )
         db.add(profile)
         db.commit()
     return profile, is_new
 
 
-def get_today_logs(db, user_id: str) -> list:
+def get_today_logs(db, user_id: str, timezone_str: str = "Asia/Taipei") -> list:
     """Return all LogEntry rows for today, ordered by timestamp."""
-    today_start = datetime.datetime.now().replace(
-        hour=0, minute=0, second=0, microsecond=0
-    )
+    try:
+        user_tz = zoneinfo.ZoneInfo(timezone_str)
+    except Exception:
+        user_tz = zoneinfo.ZoneInfo("Asia/Taipei")
+        
+    now_utc = datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc)
+    now_local = now_utc.astimezone(user_tz)
+    midnight_local = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
+    today_start = midnight_local.astimezone(datetime.timezone.utc).replace(tzinfo=None)
+    
     return (
         db.query(LogEntry)
         .filter(
@@ -125,9 +134,9 @@ def get_today_logs(db, user_id: str) -> list:
     )
 
 
-def get_today_summary(db, user_id: str) -> tuple[float, float]:
+def get_today_summary(db, user_id: str, timezone_str: str = "Asia/Taipei") -> tuple[float, float]:
     """Return (net_calories, net_protein) for today."""
-    logs = get_today_logs(db, user_id)
+    logs = get_today_logs(db, user_id, timezone_str)
     net_cal, net_pro = 0.0, 0.0
     for row in logs:
         if row.record_type == "FOOD":
@@ -182,7 +191,15 @@ def handle_text_message(event):
 
         # ── Stage 0: Direct database deletion ────────────────────────────────
         if msg_upper in ["刪除今天", "刪除全部", "DELETE ALL", "DELETE TODAY"]:
-            today_start = datetime.datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+            try:
+                user_tz = zoneinfo.ZoneInfo(profile.timezone)
+            except Exception:
+                user_tz = zoneinfo.ZoneInfo("Asia/Taipei")
+            now_utc = datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc)
+            now_local = now_utc.astimezone(user_tz)
+            midnight_local = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
+            today_start = midnight_local.astimezone(datetime.timezone.utc).replace(tzinfo=None)
+
             logs_to_delete = db.query(LogEntry).filter(
                 LogEntry.line_user_id == user_id, 
                 LogEntry.timestamp >= today_start
@@ -198,7 +215,7 @@ def handle_text_message(event):
             parts = user_message.split()
             if len(parts) > 1 and parts[-1].isdigit():
                 local_id = int(parts[-1])
-                visible_logs = [log for log in get_today_logs(db, user_id) if log.record_type != "BODY_UPDATE"]
+                visible_logs = [log for log in get_today_logs(db, user_id, profile.timezone) if log.record_type != "BODY_UPDATE"]
                 if 1 <= local_id <= len(visible_logs):
                     log_to_delete = visible_logs[local_id - 1]
                     db.delete(log_to_delete)
@@ -219,13 +236,13 @@ def handle_text_message(event):
             return
 
         # Fetch today's logs — needed for both review and Gemini context
-        today_logs = get_today_logs(db, user_id)
+        today_logs = get_today_logs(db, user_id, profile.timezone)
 
         # ── Stage 2: Zero-cost phrase-list intent routing ────────────────────
         if is_review_intent(user_message):
-            messages = [build_review_msg(today_logs)]
+            messages = [build_review_msg(today_logs, profile)]
             daily_protein_goal = profile.weight_kg * profile.target_protein_multiplier
-            net_cal, net_pro = get_today_summary(db, user_id)
+            net_cal, net_pro = get_today_summary(db, user_id, profile.timezone)
             messages.append(
                 build_summary_flex(net_cal, net_pro, profile.target_calories, daily_protein_goal)
             )
@@ -306,6 +323,7 @@ def handle_text_message(event):
                     bf = data.get("body_fat_percentage")
                     age = data.get("age")
                     h = data.get("height_cm")
+                    tz = data.get("timezone")
                     
                     if w is not None:
                         log_entry.weight_kg = w
@@ -319,6 +337,7 @@ def handle_text_message(event):
                     if bf: profile.body_fat_percentage = bf
                     if age: profile.age = age
                     if h: profile.height_cm = h
+                    if tz: profile.timezone = tz
                     
                     profile.target_calories = calculate_tdee(
                         profile.weight_kg, profile.body_fat_percentage, profile.age, profile.height_cm
@@ -338,7 +357,7 @@ def handle_text_message(event):
         # Append Flex summary card only when something was actually logged
         if has_updates:
             daily_protein_goal = profile.weight_kg * profile.target_protein_multiplier
-            net_cal, net_pro = get_today_summary(db, user_id)
+            net_cal, net_pro = get_today_summary(db, user_id, profile.timezone)
             messages.append(
                 build_summary_flex(
                     net_cal, net_pro, profile.target_calories, daily_protein_goal
@@ -347,7 +366,7 @@ def handle_text_message(event):
 
             # --- Reminder Logic ---
             # Re-fetch today_logs to include whatever we just added
-            updated_logs = get_today_logs(db, user_id)
+            updated_logs = get_today_logs(db, user_id, profile.timezone)
             has_exercised = any(l.record_type == "EXERCISE" for l in updated_logs)
             
             # Re-evaluate if the user just logged a food
@@ -409,7 +428,7 @@ def handle_image_message(event):
         message_content = line_bot_api.get_message_content(event.message.id)
         image_bytes = b"".join([chunk for chunk in message_content.iter_content()])
 
-        today_logs = get_today_logs(db, user_id)
+        today_logs = get_today_logs(db, user_id, profile.timezone)
         prompt = build_prompt(profile, today_logs, "請分析圖片中的食物熱量或營養標示並記錄", "food")
 
         try:
@@ -465,7 +484,7 @@ def handle_image_message(event):
         # Append Flex summary card only when something was actually logged
         if has_updates:
             daily_protein_goal = profile.weight_kg * profile.target_protein_multiplier
-            net_cal, net_pro = get_today_summary(db, user_id)
+            net_cal, net_pro = get_today_summary(db, user_id, profile.timezone)
             messages.append(
                 build_summary_flex(
                     net_cal, net_pro, profile.target_calories, daily_protein_goal
