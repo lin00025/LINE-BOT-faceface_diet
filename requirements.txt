@@ -4,3 +4,4 @@ line-bot-sdk
 python-dotenv
 google-generativeai
 sqlalchemy
+psycopg2-binary

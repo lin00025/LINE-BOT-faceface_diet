@@ -1,13 +1,23 @@
+import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from models import Base
 
-SQLALCHEMY_DATABASE_URL = "sqlite:///./tracker.db"
+DATABASE_URL = os.getenv("DATABASE_URL")
 
-# connect_args={"check_same_thread": False} is needed only for SQLite
-engine = create_engine(
-    SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
-)
+if DATABASE_URL:
+    # Supabase sometimes provides `postgres://`, but SQLAlchemy needs `postgresql://`
+    if DATABASE_URL.startswith("postgres://"):
+        DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+        
+    engine = create_engine(DATABASE_URL)
+else:
+    # Fallback to local SQLite development
+    SQLALCHEMY_DATABASE_URL = "sqlite:///./tracker.db"
+    engine = create_engine(
+        SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
+    )
+
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def init_db():
