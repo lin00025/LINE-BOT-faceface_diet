@@ -109,7 +109,7 @@ def build_prompt(profile, today_logs, user_message: str, mode: str = "auto") -> 
     profile_context = (
         f"[系統隱藏資訊: 使用者 {name_for_prompt}, "
         f"{profile.age}歲, 身高 {profile.height_cm}cm, 體重 {profile.weight_kg}kg, "
-        f"體脂 {profile.body_fat_percentage}%, 目標TDEE {profile.target_calories}卡, 位置: {profile.timezone}]\n"
+        f"體脂 {profile.body_fat_percentage}%, 目標TDEE {profile.target_calories}卡, 時區: {profile.timezone}]\n"
     )
 
     # --- Today's diet/exercise log context ---

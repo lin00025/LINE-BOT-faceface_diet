@@ -44,7 +44,7 @@ def build_profile_msg(profile) -> TextSendMessage:
         f"📏 身高: {profile.height_cm} cm\n"
         f"⚖️ 體重: {profile.weight_kg} kg\n"
         f"🍟 體脂: {profile.body_fat_percentage} %\n\n"
-        f"📍 位置: {profile.timezone}\n\n"
+        f"📍 時區: {profile.timezone}\n\n"
         f"🎯 TDEE代謝量: {profile.target_calories} 大卡\n"
         f"🥚 蛋白質目標: {profile.target_protein_multiplier}g × 體重(kg)\n"
         f"🕒 最後更新: {updated_str}"
