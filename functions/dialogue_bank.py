@@ -6,7 +6,8 @@ import random
 NO_EXERCISE_PROMPTS = [
     "你今天有運動了嗎？可以去騎騎腳踏車機或走路。記得喝水",
     "每天都該動一動，像臉臉就有爬~~富士山",
-    "今天是不是還沒運動？🐻"
+    "今天是不是還沒運動？🐻", 
+    "TDEE是生理基礎代謝量，熱量目標沒有包含平日活動走路喔",
 ]
 
 def get_reminder_no_exercise() -> str:
@@ -34,7 +35,7 @@ def get_reminder_exceed_tdee(exceed_cal: int, weight_kg: float) -> str:
 def resolve_nickname(real_name: str) -> str:
     """
     Checks the user's real name against known family members.
-    Returns a configured nickname 60% of the time, or their real name otherwise.
+    Returns a configured nickname 70% of the time, or their real name otherwise.
     """
     if not real_name:
         return ""
@@ -49,7 +50,7 @@ def resolve_nickname(real_name: str) -> str:
     
     for key, nick_list in nicknames.items():
         if key in real_name:
-            if random.random() <= 0.60:
+            if random.random() <= 0.70:
                 return random.choice(nick_list)
             break # Match found but probability missed, return real name
             
